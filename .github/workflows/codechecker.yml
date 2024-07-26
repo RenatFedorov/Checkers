@@ -1,0 +1,86 @@
+name: Проверка
+on: push
+jobs:
+  linter:
+    runs-on: ubuntu-latest
+    env:
+      report_path: flake_report
+    strategy:
+      matrix:
+        python-version: [ "3.10", "3.11" ]
+
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Установка Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Установка зависимостей
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Создание папки для отчета
+        run: |
+          mkdir -p ${{ env.report_path }}_${{ matrix.python-version }}
+      - name: Flake8
+        run: flake8 --config setup.cfg .
+
+  mypy_check:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [ "3.10", "3.11" ]
+
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Установка Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Установка зависимостей
+        run: |
+          python -m pip install --upgrade pip
+          pip install pydantic==2.8.2 \
+          mypy==1.11.0 \
+          types-PyYAML==6.0.12.12 \
+          types-requests==2.31.0.20240218
+      - name: Mypy проверка
+        run: mypy --explicit-package-bases .
+
+  unittest:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [ "3.10", "3.11" ]
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Установка Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Unittest проверка
+        run: python3 -m unittest discover -s tests
+
+
+  notify_telegram:
+    runs-on: ubuntu-latest
+    needs: [linter, mypy_check, unittest]
+    steps:
+      - name: Оповещение в телеграмме
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.BOT_ID }}
+          message: |
+            ${{ github.actor }} created commit.
+            Workflow has passed successfully.
+
+            Repository: ${{ github.repository }}
+
+            See changes: https://github.com/${{ github.repository }}/commit/${{github.sha}}
